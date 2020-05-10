@@ -136,7 +136,6 @@ func (q *blocksQueue) loop() {
 	ticker := time.NewTicker(pollingInterval)
 	tickerEvents := []eventID{eventSchedule, eventReadyToSend, eventCheckStale, eventExtendWindow}
 	for {
-
 		if q.headFetcher.HeadSlot() >= q.highestExpectedSlot {
 			// By the time initial sync is complete, highest slot may increase, re-check.
 			if q.highestExpectedSlot < q.blocksFetcher.bestFinalizedSlot() {
@@ -150,16 +149,22 @@ func (q *blocksQueue) loop() {
 		select {
 		case <-ticker.C:
 			for _, state := range q.state.epochs {
+				epochInd, ok := q.state.findEpochState(state.epoch)
+				if !ok {
+					log.WithField("epoch", state.epoch).Debug("Epoch state not found")
+					continue
+				}
+				state := q.state.epochs[epochInd]
 				data := &fetchRequestParams{
 					start: helpers.StartSlot(state.epoch),
 					count: slotsPerEpoch,
 				}
 
 				// Trigger events on each epoch's state machine.
-				for _, event := range tickerEvents {
-					if err := q.state.trigger(event, state.epoch, data); err != nil {
+				for _, eventID := range tickerEvents {
+					if err := state.trigger(q.state.events[eventID], data); err != nil {
 						log.WithFields(logrus.Fields{
-							"event": event,
+							"event": eventID,
 							"epoch": state.epoch,
 							"error": err.Error(),
 						}).Debug("Can not trigger event")
@@ -191,7 +196,7 @@ func (q *blocksQueue) loop() {
 			epoch := helpers.SlotToEpoch(response.start)
 			if ind, ok := q.state.findEpochState(epoch); ok {
 				state := q.state.epochs[ind]
-				if err := q.state.trigger(eventDataReceived, state.epoch, response); err != nil {
+				if err := state.trigger(q.state.events[eventDataReceived], response); err != nil {
 					log.WithFields(logrus.Fields{
 						"event": eventDataReceived,
 						"epoch": state.epoch,
