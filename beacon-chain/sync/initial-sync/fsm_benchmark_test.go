@@ -7,46 +7,20 @@ import (
 func BenchmarkStateMachine_trigger(b *testing.B) {
 	sm := newStateMachine()
 
-	sm.addHandler(stateNew, eventSchedule, func(state *epochState, in interface{}) (id stateID, err error) {
+	handlerFn := func(state *epochState, in interface{}) (id stateID, err error) {
 		response, ok := in.(*fetchRequestParams)
 		if !ok {
 			return 0, errInputNotFetchRequestParams
 		}
 		_ = response.count
 		return stateScheduled, nil
-	})
-	sm.addHandler(stateScheduled, eventDataReceived, func(state *epochState, in interface{}) (id stateID, err error) {
-		response, ok := in.(*fetchRequestParams)
-		if !ok {
-			return 0, errInputNotFetchRequestParams
-		}
-		_ = response.count
-		return stateDataParsed, nil
-	})
-	sm.addHandler(stateDataParsed, eventReadyToSend, func(state *epochState, in interface{}) (id stateID, err error) {
-		response, ok := in.(*fetchRequestParams)
-		if !ok {
-			return 0, errInputNotFetchRequestParams
-		}
-		_ = response.count
-		return stateSent, nil
-	})
-	sm.addHandler(stateSkipped, eventExtendWindow, func(state *epochState, in interface{}) (id stateID, err error) {
-		response, ok := in.(*fetchRequestParams)
-		if !ok {
-			return 0, errInputNotFetchRequestParams
-		}
-		_ = response.count
-		return stateNew, nil
-	})
-	sm.addHandler(stateSent, eventCheckStale, func(state *epochState, in interface{}) (id stateID, err error) {
-		response, ok := in.(*fetchRequestParams)
-		if !ok {
-			return 0, errInputNotFetchRequestParams
-		}
-		_ = response.count
-		return stateNew, nil
-	})
+	}
+
+	sm.addHandler(stateNew, eventSchedule, handlerFn)
+	sm.addHandler(stateScheduled, eventDataReceived, handlerFn)
+	sm.addHandler(stateDataParsed, eventReadyToSend, handlerFn)
+	sm.addHandler(stateSkipped, eventExtendWindow, handlerFn)
+	sm.addHandler(stateSent, eventCheckStale, handlerFn)
 
 	for i := uint64(0); i < lookaheadEpochs; i++ {
 		sm.addEpochState(i)
