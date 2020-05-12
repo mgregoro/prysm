@@ -143,6 +143,10 @@ var (
 		Name:  "disable-lookback",
 		Usage: "Disables use of the lookback feature and updates attestation history for validators from head to epoch 0",
 	}
+	enableInitSyncWeightedRoundRobin = &cli.BoolFlag{
+		Name:  "enable-init-sync-weighted-round-robin",
+		Usage: "Enables weighted round robin fetching optimization",
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
@@ -150,6 +154,7 @@ var devModeFlags = []cli.Flag{
 	enableStateRefCopy,
 	enableFieldTrie,
 	enableNewStateMgmt,
+	enableInitSyncWeightedRoundRobin,
 }
 
 // Deprecated flags list.
