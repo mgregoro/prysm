@@ -15,6 +15,7 @@ import (
 	p2pt "github.com/prysmaticlabs/prysm/beacon-chain/p2p/testing"
 	stateTrie "github.com/prysmaticlabs/prysm/beacon-chain/state"
 	p2ppb "github.com/prysmaticlabs/prysm/proto/beacon/p2p/v1"
+	"github.com/prysmaticlabs/prysm/shared/featureconfig"
 	"github.com/prysmaticlabs/prysm/shared/params"
 	"github.com/prysmaticlabs/prysm/shared/sliceutil"
 	"github.com/prysmaticlabs/prysm/shared/testutil"
@@ -352,6 +353,7 @@ func TestBlocksFetcherRoundRobin(t *testing.T) {
 
 						if resp.err != nil {
 							log.WithError(resp.err).Debug("Block fetcher returned error")
+							wg.Add(1)
 						} else {
 							unionRespBlocks = append(unionRespBlocks, resp.blocks...)
 							if len(resp.blocks) == 0 {
@@ -546,23 +548,25 @@ func TestBlocksFetcherRequestBeaconBlocksByRangeRequest(t *testing.T) {
 		t.Errorf("incorrect number of blocks returned, expected: %v, got: %v", blockBatchSize, len(blocks))
 	}
 
-	// Test request fail over (success).
-	err = fetcher.p2p.Disconnect(peers[0])
-	if err != nil {
-		t.Error(err)
-	}
-	blocks, err = fetcher.requestBeaconBlocksByRange(context.Background(), peers[0], root, 1, 1, blockBatchSize)
-	if err != nil {
-		t.Errorf("error: %v", err)
-	}
+	if !featureconfig.Get().EnableInitSyncWeightedRoundRobin {
+		// Test request fail over (success).
+		err = fetcher.p2p.Disconnect(peers[0])
+		if err != nil {
+			t.Error(err)
+		}
+		blocks, err = fetcher.requestBeaconBlocksByRange(context.Background(), peers[0], root, 1, 1, blockBatchSize)
+		if err != nil {
+			t.Errorf("error: %v", err)
+		}
 
-	// Test request fail over (error).
-	err = fetcher.p2p.Disconnect(peers[1])
-	ctx, _ = context.WithTimeout(context.Background(), time.Second*1)
-	blocks, err = fetcher.requestBeaconBlocksByRange(ctx, peers[1], root, 1, 1, blockBatchSize)
-	testutil.AssertLogsContain(t, hook, "Request failed, trying to forward request to another peer")
-	if err == nil || err.Error() != "context deadline exceeded" {
-		t.Errorf("expected context closed error, got: %v", err)
+		// Test request fail over (error).
+		err = fetcher.p2p.Disconnect(peers[1])
+		ctx, _ = context.WithTimeout(context.Background(), time.Second*1)
+		blocks, err = fetcher.requestBeaconBlocksByRange(ctx, peers[1], root, 1, 1, blockBatchSize)
+		testutil.AssertLogsContain(t, hook, "Request failed, trying to forward request to another peer")
+		if err == nil || err.Error() != "context deadline exceeded" {
+			t.Errorf("expected context closed error, got: %v", err)
+		}
 	}
 
 	// Test context cancellation.

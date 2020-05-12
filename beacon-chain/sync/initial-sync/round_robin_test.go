@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kevinms/leakybucket-go"
 	eth "github.com/prysmaticlabs/ethereumapis/eth/v1alpha1"
 	mock "github.com/prysmaticlabs/prysm/beacon-chain/blockchain/testing"
 	dbtest "github.com/prysmaticlabs/prysm/beacon-chain/db/testing"
@@ -257,13 +256,12 @@ func TestRoundRobinSync(t *testing.T) {
 				DB:    beaconDB,
 			} // no-op mock
 			s := &Service{
-				chain:             mc,
-				blockNotifier:     mc.BlockNotifier(),
-				p2p:               p,
-				db:                beaconDB,
-				synced:            false,
-				chainStarted:      true,
-				blocksRateLimiter: leakybucket.NewCollector(allowedBlocksPerSecond, allowedBlocksPerSecond, false /* deleteEmptyBuckets */),
+				chain:         mc,
+				blockNotifier: mc.BlockNotifier(),
+				p2p:           p,
+				db:            beaconDB,
+				synced:        false,
+				chainStarted:  true,
 			}
 			if err := s.roundRobinSync(makeGenesisTime(tt.currentSlot)); err != nil {
 				t.Error(err)

@@ -93,9 +93,12 @@ func (s *Service) roundRobinSync(genesis time.Time) error {
 	best := pids[0]
 
 	for head := helpers.SlotsSince(genesis); s.chain.HeadSlot() < head; {
+		count := mathutil.Min(
+			helpers.SlotsSince(genesis)-s.chain.HeadSlot()+1,
+			uint64(queue.blocksFetcher.allowedBlocksPerSecond))
 		req := &p2ppb.BeaconBlocksByRangeRequest{
 			StartSlot: s.chain.HeadSlot() + 1,
-			Count:     mathutil.Min(helpers.SlotsSince(genesis)-s.chain.HeadSlot()+1, allowedBlocksPerSecond),
+			Count:     count,
 			Step:      1,
 		}
 		log.WithFields(logrus.Fields{

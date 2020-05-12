@@ -428,6 +428,7 @@ var BeaconChainFlags = append(deprecatedFlags, []cli.Flag{
 	disableInitSyncBatchSaveBlocks,
 	enableStateRefCopy,
 	waitForSyncedFlag,
+	enableInitSyncWeightedRoundRobin,
 }...)
 
 // E2EBeaconChainFlags contains a list of the beacon chain feature flags to be tested in E2E.
