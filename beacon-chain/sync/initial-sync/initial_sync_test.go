@@ -54,6 +54,7 @@ func TestMain(m *testing.M) {
 
 	resetCfg := featureconfig.InitWithReset(&featureconfig.Flags{
 		EnableInitSyncWeightedRoundRobin: true,
+		NewStateMgmt:                     false,
 	})
 	defer resetCfg()
 

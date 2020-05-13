@@ -37,6 +37,8 @@ const (
 	peersPercentagePerRequest = 0.75
 	// handshakePollingInterval is a polling interval for checking the number of received handshakes.
 	handshakePollingInterval = 5 * time.Second
+	// maxFailOverAttempts defines how many times to re-attempt fetching within a single request.
+	maxFailOverAttempts = 5
 )
 
 var (
@@ -230,20 +232,31 @@ func (f *blocksFetcher) fetchBlocksFromSinglePeer(
 	ctx context.Context,
 	start, step, count uint64,
 	peers []peer.ID,
-) ([]*eth.SignedBeaconBlock, error) {
+) (blocks []*eth.SignedBeaconBlock, err error) {
 	ctx, span := trace.StartSpan(ctx, "initialsync.fetchBlocksFromSinglePeer")
 	defer span.End()
 
+	blocks = []*eth.SignedBeaconBlock{}
 	peers = f.selectPeers(peers)
 	if len(peers) == 0 {
-		return []*eth.SignedBeaconBlock{}, errNoPeersAvailable
+		return blocks, errNoPeersAvailable
 	}
 	req := &p2ppb.BeaconBlocksByRangeRequest{
 		StartSlot: start,
 		Count:     count,
 		Step:      step,
 	}
-	return f.requestBlocks(ctx, req, peers[0])
+	pid := peers[0]
+	for i := 0; i < maxFailOverAttempts; i++ {
+		blocks, err = f.requestBlocks(ctx, req, pid)
+		if err == nil {
+			return
+		}
+		if pid, peers, err = f.selectFailOverPeer(pid, peers); err != nil {
+			return
+		}
+	}
+	return
 }
 
 // fetchBlocksFromPeers orchestrates block fetching from the available peers.
@@ -374,7 +387,7 @@ func (f *blocksFetcher) requestBeaconBlocksByRange(
 		if bytes.Compare(root, root1) != 0 {
 			return nil, errors.Errorf("can not resend, root mismatch: %x:%x", root, root1)
 		}
-		newPID, err := selectFailOverPeer(pid, peers)
+		newPID, _, err := f.selectFailOverPeer(pid, peers)
 		if err != nil {
 			return nil, err
 		}
@@ -437,7 +450,7 @@ func (f *blocksFetcher) requestBlocks(
 }
 
 // selectFailOverPeer randomly selects fail over peer from the list of available peers.
-func selectFailOverPeer(excludedPID peer.ID, peers []peer.ID) (peer.ID, error) {
+func (f *blocksFetcher) selectFailOverPeer(excludedPID peer.ID, peers []peer.ID) (peer.ID, []peer.ID, error) {
 	for i, pid := range peers {
 		if pid == excludedPID {
 			peers = append(peers[:i], peers[i+1:]...)
@@ -446,7 +459,7 @@ func selectFailOverPeer(excludedPID peer.ID, peers []peer.ID) (peer.ID, error) {
 	}
 
 	if len(peers) == 0 {
-		return "", errNoPeersAvailable
+		return "", peers, errNoPeersAvailable
 	}
 
 	randGenerator := rand.New(rand.NewSource(roughtime.Now().Unix()))
@@ -454,7 +467,7 @@ func selectFailOverPeer(excludedPID peer.ID, peers []peer.ID) (peer.ID, error) {
 		peers[i], peers[j] = peers[j], peers[i]
 	})
 
-	return peers[0], nil
+	return peers[0], peers, nil
 }
 
 // waitForMinimumPeers spins and waits up until enough peers are available.
